@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Rural Farmer Marketplace - Demo with Login</title>
+
+<style>
+body { font-family: Arial, sans-serif; background:#f6f7f9; margin:0; }
+header { background:#2b9348; color:#fff; padding:16px; text-align:center; }
+
+.container { max-width:900px; margin:20px auto; padding:20px; }
+.view { display:none; background:#fff; padding:20px; border-radius:8px;
+        box-shadow:0 3px 10px rgba(0,0,0,0.08); }
+
+input, select {
+  width:100%; padding:10px; margin-top:8px;
+  border:1px solid #ccc; border-radius:6px;
+}
+button { padding:10px 16px; background:#2b9348; color:#fff;
+         border:none; border-radius:6px; cursor:pointer; }
+button.secondary { background:#ddd; color:#222; }
+
+.navbar { display:flex; justify-content:center; gap:12px; padding:12px; background:#fff;
+          box-shadow:0 1px 4px rgba(0,0,0,0.1); }
+
+.card { padding:12px; margin:10px 0; border-radius:8px; background:#fdfdfd;
+        border:1px solid #eee; }
+
+.product-item { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; }
+
+.muted { color:#666; font-size:0.9em; }
+</style>
+</head>
+
+<body>
+
+<header><h2>Rural Farmer Marketplace</h2></header>
+
+<!-- ---------- LOGIN PAGE ---------- -->
+<div id="loginPage" class="container view" style="display:block;">
+  <h2>Login</h2>
+  <p>Select role & enter credentials</p>
+
+  <label>Role</label>
+  <select id="loginRole">
+    <option value="buyer">Buyer</option>
+    <option value="farmer">Farmer</option>
+    <option value="admin">Admin</option>
+  </select>
+
+  <label>Username</label>
+  <input id="loginUser" placeholder="Enter username">
+
+  <label>Password</label>
+  <input type="password" id="loginPass" placeholder="Enter password">
+
+  <button onclick="login()">Login</button>
+
+  <p class="muted" style="margin-top:20px;">
+    Demo Credentials:<br>
+    <b>Buyer</b> → buyer / 123 <br>
+    <b>Farmer</b> → farmer / 123 <br>
+    <b>Admin</b> → admin / 123
+  </p>
+</div>
+
+<!-- ---------- NAV BAR ---------- -->
+<div id="navbar" class="navbar" style="display:none;">
+  <button onclick="switchView('buyerView')">Buyer</button>
+  <button onclick="switchView('farmerView')">Farmer</button>
+  <button onclick="switchView('adminView')">Admin</button>
+  <button class="secondary" onclick="logout()">Logout</button>
+</div>
+
+<div class="container">
+
+<!-- ---------- BUYER VIEW ---------- -->
+<div id="buyerView" class="view">
+  <h2>Buyer — Browse Products</h2>
+
+  <input id="searchInput" placeholder="Search products">
+  <button class="secondary" onclick="renderProducts()">Search</button>
+
+  <h3>Products</h3>
+  <div id="productsList" class="card"></div>
+
+  <h3>My Orders</h3>
+  <div id="ordersList" class="card"></div>
+</div>
+
+<!-- ---------- FARMER VIEW ---------- -->
+<div id="farmerView" class="view">
+  <h2>Farmer — Add Product</h2>
+
+  <label>Name</label>
+  <input id="pName">
+
+  <label>Price (₹)</label>
+  <input id="pPrice" type="number">
+
+  <label>Quantity</label>
+  <input id="pQty" type="number">
+
+  <label>Description</label>
+  <input id="pDesc">
+
+  <button onclick="addProduct()">Add Product</button>
+
+  <h3>My Products</h3>
+  <div id="myProducts" class="card"></div>
+</div>
+
+<!-- ---------- ADMIN VIEW ---------- -->
+<div id="adminView" class="view">
+  <h2>Admin — Dashboard</h2>
+
+  <div class="card">
+    <div>Total Products: <b id="statP"></b></div>
+    <div>Total Orders: <b id="statO"></b></div>
+  </div>
+
+  <h3>Orders</h3>
+  <div id="adminOrders" class="card"></div>
+</div>
+
+</div>
+
+<script>
+// --------Local Storage Initial Data--------
+const KEY = "marketDB_v1";
+
+function defaultDB() {
+  return {
+    products: [
+      {id:"1", name:"Mango Jam", price:150, qty:20, desc:"Fresh homemade jam", farmer:"Sita"},
+      {id:"2", name:"Pickle", price:120, qty:30, desc:"Traditional pickle", farmer:"Ramu"},
+    ],
+    orders:[]
+  };
+}
+
+function loadDB() {
+  let d = localStorage.getItem(KEY);
+  if(!d){ localStorage.setItem(KEY, JSON.stringify(defaultDB())); return defaultDB(); }
+  return JSON.parse(d);
+}
+
+function saveDB(){ localStorage.setItem(KEY, JSON.stringify(DB)); }
+
+let DB = loadDB();
+let currentUser = null;
+
+// ---------- LOGIN ----------
+function login() {
+  const u = loginUser.value.trim();
+  const p = loginPass.value.trim();
+  const r = loginRole.value;
+
+  if ((u==="buyer" && p==="123") ||
+      (u==="farmer" && p==="123") ||
+      (u==="admin"  && p==="123")) {
+
+    currentUser = r;
+    loginPage.style.display = "none";
+    navbar.style.display = "flex";
+
+    switchView(r + "View");
+    renderAll();
+  } else {
+    alert("Invalid credentials!");
+  }
+}
+
+// ---------- LOGOUT ----------
+function logout() {
+  currentUser = null;
+  navbar.style.display = "none";
+  loginPage.style.display = "block";
+  document.querySelectorAll(".view").forEach(v => v.style.display="none");
+}
+
+// ---------- VIEW SWITCHER ----------
+function switchView(id) {
+  document.querySelectorAll(".view").forEach(v => v.style.display="none");
+  document.getElementById(id).style.display="block";
+  renderAll();
+}
+
+// ---------- BUYER ----------
+function renderProducts() {
+  const list = document.getElementById("productsList");
+  const q = searchInput.value.toLowerCase();
+  list.innerHTML = "";
+
+  DB.products.filter(p =>
+    p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q)
+  ).forEach(p => {
+    list.innerHTML += `
+      <div class="product-item">
+        <div>
+          <b>${p.name}</b><br>
+          <span class="muted">₹${p.price} — ${p.qty} left</span>
+        </div>
+        <button onclick="buyProduct('${p.id}')">Buy</button>
+      </div>
+    `;
+  });
+}
+
+function buyProduct(id) {
+  const p = DB.products.find(x => x.id===id);
+  if(p.qty<=0) return alert("Out of stock");
+
+  p.qty--;
+  DB.orders.push({
+    id:"O"+Date.now(),
+    product:p.name,
+    price:p.price,
+    when:new Date().toLocaleString()
+  });
+
+  saveDB();
+  renderAll();
+}
+
+function renderOrders() {
+  const o = document.getElementById("ordersList");
+  o.innerHTML = "";
+  DB.orders.forEach(order => {
+    o.innerHTML += `<div class="card">${order.product} — ₹${order.price} <br><span class="muted">${order.when}</span></div>`;
+  });
+}
+
+// ---------- FARMER ----------
+function addProduct() {
+  DB.products.push({
+    id:"P"+Date.now(),
+    name:pName.value,
+    price:Number(pPrice.value),
+    qty:Number(pQty.value),
+    desc:pDesc.value,
+    farmer:"You"
+  });
+
+  saveDB();
+  pName.value = pPrice.value = pQty.value = pDesc.value = "";
+  renderAll();
+}
+
+function renderMyProducts() {
+  const m = document.getElementById("myProducts");
+  m.innerHTML = "";
+  DB.products.filter(p => p.farmer==="You").forEach(p => {
+    m.innerHTML += `<div class="card"><b>${p.name}</b> — ₹${p.price} (${p.qty})</div>`;
+  });
+}
+
+// ---------- ADMIN ----------
+function renderAdmin() {
+  statP.textContent = DB.products.length;
+  statO.textContent = DB.orders.length;
+
+  adminOrders.innerHTML = "";
+  DB.orders.forEach(o => {
+    adminOrders.innerHTML += `<div class="card">${o.product} — ₹${o.price} <br><span class="muted">${o.when}</span></div>`;
+  });
+}
+
+// ---------- RENDER ALL ----------
+function renderAll() {
+  renderProducts();
+  renderOrders();
+  renderMyProducts();
+  renderAdmin();
+}
+</script>
+
+</body>
+</html>
